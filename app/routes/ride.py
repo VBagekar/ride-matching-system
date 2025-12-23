@@ -38,7 +38,8 @@ def request_ride(ride_request: RideRequest, db: Session = Depends(get_db)):
         rider_id=rider.id,
         driver_id=nearest_driver.id,
         status=RideStatus.REQUESTED,
-        fare=100.0  # base fare for now
+        fare=calculate_fare(db)
+
     )
 
     db.add(ride)
@@ -96,3 +97,22 @@ def cancel_ride(ride_id: int, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(ride)
     return ride
+
+def calculate_fare(db):
+    base_fare = 100.0
+
+    active_rides = db.query(Ride).filter(
+        Ride.status.in_([RideStatus.REQUESTED, RideStatus.ACCEPTED])
+    ).count()
+
+    available_drivers = db.query(Driver).filter(
+        Driver.is_available == True
+    ).count()
+
+    if available_drivers == 0:
+        return base_fare * 1.5
+
+    if active_rides > available_drivers:
+        return base_fare * 1.5
+
+    return base_fare
