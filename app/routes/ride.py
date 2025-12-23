@@ -31,7 +31,7 @@ def request_ride(ride_request: RideRequest, db: Session = Depends(get_db)):
             min_distance = distance
             nearest_driver = driver
 
-    # Lock driver
+ 
     nearest_driver.is_available = False
 
     ride = Ride(
@@ -45,4 +45,54 @@ def request_ride(ride_request: RideRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(ride)
 
+    return ride
+
+@router.post("/{ride_id}/accept", response_model=RideResponse)
+def accept_ride(ride_id: int, db: Session = Depends(get_db)):
+    ride = db.query(Ride).filter(Ride.id == ride_id).first()
+    if not ride:
+        raise HTTPException(status_code=404, detail="Ride not found")
+
+    if ride.status != RideStatus.REQUESTED:
+        raise HTTPException(status_code=400, detail="Ride cannot be accepted")
+
+    ride.status = RideStatus.ACCEPTED
+    db.commit()
+    db.refresh(ride)
+    return ride
+
+@router.post("/{ride_id}/complete", response_model=RideResponse)
+def complete_ride(ride_id: int, db: Session = Depends(get_db)):
+    ride = db.query(Ride).filter(Ride.id == ride_id).first()
+    if not ride:
+        raise HTTPException(status_code=404, detail="Ride not found")
+
+    if ride.status != RideStatus.ACCEPTED:
+        raise HTTPException(status_code=400, detail="Ride cannot be completed")
+
+    driver = db.query(Driver).filter(Driver.id == ride.driver_id).first()
+
+    ride.status = RideStatus.COMPLETED
+    driver.is_available = True
+
+    db.commit()
+    db.refresh(ride)
+    return ride
+
+@router.post("/{ride_id}/cancel", response_model=RideResponse)
+def cancel_ride(ride_id: int, db: Session = Depends(get_db)):
+    ride = db.query(Ride).filter(Ride.id == ride_id).first()
+    if not ride:
+        raise HTTPException(status_code=404, detail="Ride not found")
+
+    if ride.status == RideStatus.COMPLETED:
+        raise HTTPException(status_code=400, detail="Completed ride cannot be cancelled")
+
+    driver = db.query(Driver).filter(Driver.id == ride.driver_id).first()
+
+    ride.status = RideStatus.CANCELLED
+    driver.is_available = True
+
+    db.commit()
+    db.refresh(ride)
     return ride
